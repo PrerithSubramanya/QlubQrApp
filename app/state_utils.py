@@ -1,5 +1,5 @@
 import pynecone as pc
-from QlubApp.s3_utils import get_table_qr_image
+from app.s3_utils import get_table_qr_image
 
 
 class State(pc.State):

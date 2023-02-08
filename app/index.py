@@ -1,6 +1,6 @@
 import pynecone as pc
-from QlubApp.state_utils import State
-from QlubApp.s3_utils import get_s3_resource
+from app.state_utils import State
+from app.s3_utils import get_s3_resource
 
 
 def get_s3_objects() -> list:
