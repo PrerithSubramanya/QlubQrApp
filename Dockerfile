@@ -1,63 +1,49 @@
-# See https://hub.docker.com/r/nikolaik/python-nodejs
-#     https://github.com/nikolaik/docker-python-nodejs
-# Default user is 'pn' with uid 1000, gid 1000
-FROM nikolaik/python-nodejs:python3.10-nodejs18
+FROM python:3.11-slim as base
 
-# Install nginx and give permissions to 'pn'
-# See https://www.rockyourcode.com/run-docker-nginx-as-non-root-user/
-USER root
+RUN adduser --disabled-password pynecone
 
-RUN apt-get -y update && apt-get -y install nginx
 
-RUN mkdir -p /var/cache/nginx \
-             /var/log/nginx \
-             /var/lib/nginx
-RUN touch /var/run/nginx.pid
+FROM base as build
 
-RUN chown -R pn:pn /var/cache/nginx \
-                       /var/log/nginx \
-                       /var/lib/nginx \
-                       /var/run/nginx.pid
+WORKDIR /app
+ENV VIRTUAL_ENV=/app/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Install dependencies and build app as non-root
-USER pn
-ENV HOME=/home/pn \
-    PATH=/home/pn/.local/bin:$PATH
+COPY . .
 
-RUN mkdir $HOME/app
+RUN pip install wheel \
+    && pip install -r requirements.txt
 
-WORKDIR $HOME/app
 
-# Install bun manually
-RUN curl -fsSL https://bun.sh/install | bash
+FROM base as runtime
 
-# Install pynecone
-RUN pip install --no-cache-dir --upgrade pynecone
-RUN pip install --no-cache-dir --upgrade boto3
-RUN pip install --no-cache-dir --upgrade uvicorn
+RUN apt-get update && apt-get install -y \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_19.x | bash - \
+    && apt-get update && apt-get install -y \
+    nodejs \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
 
-# Init project
+ENV PATH="/app/venv/bin:$PATH"
+
+
+FROM runtime as init
+
+WORKDIR /app
+ENV BUN_INSTALL="/app/.bun"
+COPY --from=build /app/ /app/
 RUN pc init
 
-# Init frontend
-# Optional: could be done at runtime. But saves time if already done in container build.
-#           It installs all frontend dependencies
-RUN python -c "from pathlib import Path; from pynecone.utils import setup_frontend; setup_frontend(Path.cwd())"
 
-# Copy existing project
-COPY --chown=pn pcconfig.py pcconfig.py
-COPY --chown=pn app app
-COPY --chown=pn assets assets
+FROM runtime
 
-# Re-init frontend (if new deps from project)
-ENV PORT=$PORT
-RUN python -c "from pathlib import Path; from pynecone.utils import setup_frontend; setup_frontend(Path.cwd())"
+COPY --chown=pynecone --from=init /app/ /app/
+USER pynecone
+WORKDIR /app
 
-# Copy nginx configuration
-COPY --chown=pn nginx.conf /etc/nginx/sites-available/default
+CMD ["pc","run" , "--env", "prod"]
 
-# Copy README and entrypoint script
-COPY --chown=pn run.sh .
-
-# Run script ('service nginx start' + 'pc run')
-CMD ["bash", "run.sh"]
+EXPOSE 3000
+EXPOSE 8000
