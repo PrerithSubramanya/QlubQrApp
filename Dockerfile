@@ -1,49 +1,43 @@
-FROM python:3.11-slim as base
+FROM nikolaik/python-nodejs:python3.10-nodejs18
 
-RUN adduser --disabled-password pynecone
+# Install nginx
+USER root
 
+# Install dependencies and build app as root
+ENV HOME=/root \
+    PATH=$PATH
 
-FROM base as build
+RUN mkdir $HOME/app
 
-WORKDIR /app
-ENV VIRTUAL_ENV=/app/venv
-RUN python3 -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+WORKDIR $HOME/app
 
-COPY . .
+# Install bun manually
+RUN curl -fsSL https://bun.sh/install | bash -s -- bun-v0.5.5
 
-RUN pip install wheel \
-    && pip install -r requirements.txt
+# Install pynecone
+RUN pip install --no-cache-dir --upgrade pynecone
+RUN pip install --no-cache-dir --upgrade boto3
+RUN pip install --no-cache-dir --upgrade uvicorn
 
-
-FROM base as runtime
-
-RUN apt-get update && apt-get install -y \
-    curl \
-    && curl -fsSL https://deb.nodesource.com/setup_19.x | bash - \
-    && apt-get update && apt-get install -y \
-    nodejs \
-    unzip \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV PATH="/app/venv/bin:$PATH"
-
-
-FROM runtime as init
-
-WORKDIR /app
-ENV BUN_INSTALL="/app/.bun"
-COPY --from=build /app/ /app/
+# Init project
 RUN pc init
 
+# Init frontend
+# Optional: could be done at runtime. But saves time if already done in container build.
+#           It installs all frontend dependencies
+RUN python -c "from pathlib import Path; from pynecone.utils import setup_frontend; setup_frontend(Path.cwd())"
 
-FROM runtime
+# Copy existing project
+COPY pcconfig.py pcconfig.py
+COPY app app
+COPY assets assets
 
-COPY --chown=pynecone --from=init /app/ /app/
-USER pynecone
-WORKDIR /app
+# Re-init frontend (if new deps from project)
+RUN python -c "from pathlib import Path; from pynecone.utils import setup_frontend; setup_frontend(Path.cwd())"
 
-CMD ["pc","run" , "--env", "prod"]
 
-EXPOSE 3000
-EXPOSE 8000
+# Copy README and entrypoint script
+COPY run.sh .
+
+# Run script ('service nginx start' + 'pc run')
+CMD ["bash", "run.sh"]
