@@ -2,22 +2,6 @@ import boto3
 from botocore.client import BaseClient
 
 
-class Folder:
-    def __init__(self):
-        self._name: str = ""
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @name.setter
-    def name(self, value) -> None:
-        self._name = value
-
-
-FOLDER_NAME = Folder()
-
-
 def get_s3_client() -> BaseClient:
     return boto3.client(
         service_name="s3",
