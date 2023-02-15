@@ -2,6 +2,22 @@ import boto3
 from botocore.client import BaseClient
 
 
+class Folder:
+    def __init__(self):
+        self._name: str = ""
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, value) -> None:
+        self._name = value
+
+
+FOLDER_NAME = Folder()
+
+
 def get_s3_client() -> BaseClient:
     return boto3.client(
         service_name="s3",
@@ -20,13 +36,24 @@ def get_s3_resource() -> boto3.resource:
     )
 
 
-def get_table_qr_image(table_name: str) -> str:
+def get_table_qr_image(folder_name: str, table_name: str) -> str:
     s3 = get_s3_client()
+    table_name = table_name.split("-")[-1]
     return s3.generate_presigned_url(
         "get_object",
         Params={
             "Bucket": "qlubqrapp",
-            "Key": table_name,
+            "Key": f"{folder_name}/{table_name}.png",
         },
-        ExpiresIn=3600,
     )
+
+
+def get_s3_objects(route: str) -> list:
+    s3 = get_s3_resource()
+    my_bucket = s3.Bucket("qlubqrapp")
+    return [
+        f"Table-{obj.key.split('/')[-1].strip('.png')}"
+        if obj.key != f"{route}/"
+        else "select a table"
+        for obj in my_bucket.objects.filter(Prefix=f"{route}/")
+    ]
