@@ -1,6 +1,6 @@
 ## QLUB QR APP
 
-Qr app is a designed to generate qr images for each restaurant digitally.
+Qr app is designed to generate qr images for each restaurant's digitally.
 
 ## Demo QLUB APP
 
